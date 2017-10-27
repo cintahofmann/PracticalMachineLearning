@@ -11,11 +11,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Overview
 
-Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
 
 ## Libraries
 
-```{r}
+```{r, results=FALSE}
 library(pacman)
 pacman::p_load(caret,randomForest,ggplot2,dplyr,RANN)
 ```
@@ -26,7 +26,7 @@ pacman::p_load(caret,randomForest,ggplot2,dplyr,RANN)
 URL_train <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
 URL_validate <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
 ``` 
-Looking at the csv files before, there were lots of NA columns, empty fields, and errors, so I'm setting all of them to 'NA'.
+Looking at the csv files, there are lots of NA columns, empty fields, and errors, so I'm setting all of them to 'NA'.
 
 ```{r, results=FALSE}
 trainData <- read.csv(url(URL_train), na.strings=c("","NA","#DIV/0!"))
@@ -38,7 +38,11 @@ valCols <- colnames(validation)
 trainCols == valCols
 ```
 
-# Eliminate the missing data 
+Now all columns are the same except for the last one (classe vs. problem_id).
+
+## Eliminate the missing data 
+
+Taking out the NA fields before training the model.
 
 ```{r, results=FALSE}
 trainData1 <- trainData[,colSums(is.na(trainData))==0]
@@ -48,7 +52,7 @@ str(trainData1)
 str(valData1)
 ```
 
-There are still unnecessary columns at the beginning of the data set. Taking these out too.
+Now, there are still unnecessary columns at the beginning of the data set, e.g. the 'user_name', 'X' and the time stamps. I'm taking these out too.
 
 ```{r, results=FALSE}
 training_clean <- trainData1[,-c(1:7)]
@@ -60,21 +64,26 @@ validation_clean <- valData1[,-c(1:7)]
 colnames(training_clean)==colnames(validation_clean)
 ```
 
+The unnecessary columns are gone.
+
 ## Split into training and testing set
 
-Now it's time to split the data. I decided to split the training set into a training and a testing set and validate on the original test set.
+Now it's time to split the data. I decided to split the training set further into a training and test set and validate on the original test set.
 
 ```{r, results=FALSE}
 set.seed(12321)
 
-inTrain = createDataPartition(y=training_clean$classe,p=0.75,list=FALSE)
+inTrain = createDataPartition(y=training_clean$classe,
+                              p=0.75,list=FALSE)
 training = training_clean[inTrain,]
 testing = training_clean[-inTrain,]
 ```
 
 ```{r}
-nrow(training); nrow(testing)
+dim(training); dim(testing)
 ```
+
+After cleanup, we are left with 53 columns in each data set.
 
 ## Preparing data for training
 
@@ -89,9 +98,9 @@ ctrl <- trainControl(method="repeatedcv",number=10,repeats=10,
 
 ## Training model using PLS-DA
 
-I tried using Partial Least Squares Discriminant Analysis first (can be looked up in the caret package information).
+For the first model, I used Partial Least Squares Discriminant Analysis (can be looked up in the caret package information). The classe variable from the training set is predicted using all other information in the data set.
 
-```{r, return=FALSE}
+```{r, results=FALSE}
 pacman::p_load(pls,e1071)
 set.seed(12421)
 
@@ -100,7 +109,6 @@ train_PLS <- train(classe ~.,
                    method="pls",
                    tuneLength=15,
                    trControl=ctrl,
-                   metric="ROC",
                    preProc=c("center", "scale"))
 ```
 
@@ -110,7 +118,7 @@ train_PLS
 
 After training, I applied it to my test set (the 25% of the original training set) and looked at the confusion matrix.
 
-```{r, return=FALSE}
+```{r, results=FALSE}
 pred_PLS <- predict(train_PLS, newdata = testing)
 ```
 
@@ -118,10 +126,10 @@ pred_PLS <- predict(train_PLS, newdata = testing)
 confusionMatrix(data=pred_PLS, testing$classe)
 ```
 
-Seeing as the accuracy is only about 0.6, I will use a different method next: A Random Forest Model.
+The accuracy comes out to only about 0.6, which is a little better than random guessing. Thus, I will use a different method next: A Random Forest Model.
 
 ## Random Forest 
-```{r, return=FALSE}
+```{r, results=FALSE}
 set.seed(1010101)
 trainingRF <- randomForest(classe ~., data=training)
 ```
@@ -144,4 +152,5 @@ valRF
 
 ## Final thoughts
 
-Based on the good fit and high accuracy of the model, I hope that the out of sample error stays around 0.01. 
+The out of sample error for the model is 1 - the accuracy, so 1-0.9965 = 0.0035 for the test sample. 
+Based on the good fit and high accuracy of the model, I hope that the out of sample error stays around 0.01 for the validation set. 
